@@ -3,9 +3,10 @@ import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
+import { toast } from 'sonner';
 
 const SignUp = () => {
-  const { user, signUp, loading } = useAuth();
+  const { user, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firmName, setFirmName] = useState('');
@@ -63,8 +64,9 @@ const SignUp = () => {
     setIsSubmitting(true);
     try {
       await signUp(email, password, firmName, firmSlug);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup error:', error);
+      toast.error(error?.message || 'An error occurred during signup');
     } finally {
       setIsSubmitting(false);
     }

@@ -38,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log('Auth state change:', event, currentSession?.user?.id);
         setSession(currentSession);
         
         if (currentSession?.user) {
@@ -141,14 +142,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Login error:', error);
       toast.error(error.message || 'An error occurred during login');
+      throw error; // Re-throw to handle in the component
     } finally {
       setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, firmName: string, firmSlug: string) => {
-    setLoading(true);
     try {
+      console.log('Starting signup process for:', email);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -161,18 +163,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
+        console.error('Signup error from Supabase:', error);
         throw error;
       }
 
       if (data.user) {
+        console.log('User created successfully:', data.user.id);
         toast.success('Account created successfully!');
-        navigate(`/${firmSlug}/back/leads`);
+        
+        // Wait for a short while to ensure database triggers have completed
+        setTimeout(async () => {
+          try {
+            // Fetch the newly created firm slug
+            const { data: firmData, error: firmError } = await supabase
+              .from('firms')
+              .select('slug')
+              .eq('email', email)
+              .single();
+              
+            if (firmError) {
+              console.error('Error fetching firm slug:', firmError);
+              navigate(`/${firmSlug}/back/leads`);
+              return;
+            }
+            
+            if (firmData?.slug) {
+              console.log('Navigating to firm dashboard:', firmData.slug);
+              navigate(`/${firmData.slug}/back/leads`);
+            } else {
+              console.log('Falling back to provided slug:', firmSlug);
+              navigate(`/${firmSlug}/back/leads`);
+            }
+          } catch (error) {
+            console.error('Error in post-signup process:', error);
+            navigate(`/${firmSlug}/back/leads`);
+          }
+        }, 1000);
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('Signup process error:', error);
       toast.error(error.message || 'An error occurred during signup');
-    } finally {
-      setLoading(false);
+      throw error; // Re-throw to handle in the component
     }
   };
 
@@ -181,9 +212,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.auth.signOut();
       navigate('/');
       toast.success('Logged out successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Logout error:', error);
-      toast.error('An error occurred during logout');
+      toast.error(error.message || 'An error occurred during logout');
+      throw error; // Re-throw to handle in the component
     }
   };
 
