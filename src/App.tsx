@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -14,6 +13,7 @@ import ClientIntakeForm from "@/pages/ClientIntakeForm";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
+import LawFirmPage from "@/pages/LawFirmPage";
 
 const queryClient = new QueryClient();
 
@@ -31,11 +31,14 @@ const App = () => (
             <Route path="/signup" element={<SignUp />} />
             <Route path="/manage" element={<AdminLogin />} />
             
+            {/* Law Firm Public Pages */}
+            <Route path="/:slug" element={<LawFirmPage />} />
+            <Route path="/:slug/intake" element={<ClientIntakeForm />} />
+            
             {/* Admin Dashboard */}
             <Route path="/manage" element={<AdminDashboard />} />
             
-            {/* Law Firm Routes */}
-            <Route path="/:slug/intake" element={<ClientIntakeForm />} />
+            {/* Law Firm Protected Routes */}
             <Route path="/:slug/back/leads" element={<LeadsDashboard />} />
             <Route path="/:slug/back/account" element={<AccountSettings />} />
             
