@@ -13,8 +13,8 @@ const AdminLogin = () => {
   // If already logged in as admin, redirect to admin dashboard
   if (user && user.role === 'admin') {
     return <Navigate to="/manage" />;
-  } else if (user && user.role === 'law-firm' && user.firmSlug) {
-    // If logged in as law firm, redirect to law firm dashboard
+  } else if (user && user.role === 'lawyer' && user.firmSlug) {
+    // If logged in as lawyer, redirect to law firm dashboard
     return <Navigate to={`/${user.firmSlug}/back/leads`} />;
   }
 

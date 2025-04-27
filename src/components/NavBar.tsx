@@ -21,7 +21,7 @@ const NavBar = () => {
                     Admin Dashboard
                   </Link>
                 )}
-                {user.role === 'law-firm' && user.firmSlug && (
+                {user.role === 'lawyer' && user.firmSlug && (
                   <Link to={`/${user.firmSlug}/back/leads`} className="text-white hover:text-lawfirm-primary px-3 py-2 rounded-md text-sm font-medium">
                     Dashboard
                   </Link>
