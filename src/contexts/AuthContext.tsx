@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -34,6 +33,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  // Helper function to fetch firm details
+  const fetchFirmDetails = async (email: string, maxRetries = 3): Promise<string | null> => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const { data, error } = await supabase
+          .from('firms')
+          .select('slug')
+          .eq('email', email)
+          .single();
+
+        if (error) throw error;
+        if (data?.slug) return data.slug;
+        
+        // If no data found and retries left, wait before next attempt
+        if (i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        console.error(`Attempt ${i + 1} failed:`, error);
+        if (i === maxRetries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -42,7 +67,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         
         if (currentSession?.user) {
-          await refreshUserDetails(currentSession.user);
+          try {
+            await refreshUserDetails(currentSession.user);
+          } catch (error) {
+            console.error('Error refreshing user details:', error);
+            setUser(null);
+          }
         } else {
           setUser(null);
         }
@@ -149,6 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (email: string, password: string, firmName: string, firmSlug: string) => {
+    setLoading(true);
     try {
       console.log('Starting signup process for:', email);
       const { data, error } = await supabase.auth.signUp({
@@ -167,43 +198,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
 
-      if (data.user) {
-        console.log('User created successfully:', data.user.id);
-        toast.success('Account created successfully!');
+      if (!data.user) {
+        throw new Error('No user data returned from signup');
+      }
+
+      // Show success message
+      toast.success('Account created successfully!');
+      
+      try {
+        // Try to get the firm slug with retries
+        const confirmedSlug = await fetchFirmDetails(email);
         
-        // Wait for a short while to ensure database triggers have completed
-        setTimeout(async () => {
-          try {
-            // Fetch the newly created firm slug
-            const { data: firmData, error: firmError } = await supabase
-              .from('firms')
-              .select('slug')
-              .eq('email', email)
-              .single();
-              
-            if (firmError) {
-              console.error('Error fetching firm slug:', firmError);
-              navigate(`/${firmSlug}/back/leads`);
-              return;
-            }
-            
-            if (firmData?.slug) {
-              console.log('Navigating to firm dashboard:', firmData.slug);
-              navigate(`/${firmData.slug}/back/leads`);
-            } else {
-              console.log('Falling back to provided slug:', firmSlug);
-              navigate(`/${firmSlug}/back/leads`);
-            }
-          } catch (error) {
-            console.error('Error in post-signup process:', error);
-            navigate(`/${firmSlug}/back/leads`);
-          }
-        }, 1000);
+        // Navigate to the dashboard using either the confirmed slug or the provided one
+        const targetSlug = confirmedSlug || firmSlug;
+        console.log('Navigating to dashboard with slug:', targetSlug);
+        navigate(`/${targetSlug}/back/leads`);
+      } catch (error) {
+        console.error('Error in post-signup process:', error);
+        // Fall back to the provided slug if there's an error
+        navigate(`/${firmSlug}/back/leads`);
       }
     } catch (error: any) {
       console.error('Signup process error:', error);
       toast.error(error.message || 'An error occurred during signup');
-      throw error; // Re-throw to handle in the component
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
