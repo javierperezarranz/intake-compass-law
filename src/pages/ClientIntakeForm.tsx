@@ -1,8 +1,9 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import Logo from '@/components/Logo';
+import { supabase } from '@/integrations/supabase/client';
 
 interface IntakeFormData {
   fullName: string;
@@ -24,10 +25,43 @@ const ClientIntakeForm = () => {
   }>({});
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isValidFirm, setIsValidFirm] = useState<boolean | null>(null);
+  const [firmName, setFirmName] = useState<string>('');
+  
+  // Check if the firm exists
+  useEffect(() => {
+    const checkFirmExists = async () => {
+      if (!slug) {
+        setIsValidFirm(false);
+        return;
+      }
 
-  // Mock data for demo purposes - in a real app this would validate against a database
-  const validFirmSlugs = ['demo', 'test-firm'];
-  if (!slug || !validFirmSlugs.includes(slug)) {
+      try {
+        const { data, error } = await supabase
+          .from('firms')
+          .select('name')
+          .eq('slug', slug)
+          .single();
+          
+        if (error || !data) {
+          console.error('Error checking firm:', error);
+          setIsValidFirm(false);
+          return;
+        }
+        
+        setFirmName(data.name);
+        setIsValidFirm(true);
+      } catch (err) {
+        console.error('Error checking firm:', err);
+        setIsValidFirm(false);
+      }
+    };
+    
+    checkFirmExists();
+  }, [slug]);
+
+  // Return not found if the firm doesn't exist or we're still loading
+  if (isValidFirm === false) {
     return <Navigate to="/not-found" />;
   }
 
@@ -68,11 +102,30 @@ const ClientIntakeForm = () => {
     setLoading(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get firm_id from the slug
+      const { data: firmData, error: firmError } = await supabase
+        .from('firms')
+        .select('firm_id')
+        .eq('slug', slug)
+        .single();
       
-      // In a real app, this would send the data to your backend
-      console.log('Form submitted:', formData);
+      if (firmError || !firmData) {
+        throw new Error('Could not find law firm');
+      }
+      
+      // Submit lead to database
+      const { error: leadError } = await supabase
+        .from('leads')
+        .insert({
+          full_name: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          firm_id: firmData.firm_id
+        });
+        
+      if (leadError) {
+        throw new Error('Failed to submit information');
+      }
       
       setSubmitted(true);
       toast.success('Your information has been submitted!');
@@ -83,6 +136,16 @@ const ClientIntakeForm = () => {
       setLoading(false);
     }
   };
+
+  // Show loading state while checking if firm exists
+  if (isValidFirm === null) {
+    return (
+      <div className="law-app-bg min-h-screen flex flex-col items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+        <p className="text-white mt-4">Loading...</p>
+      </div>
+    );
+  }
 
   // Show success message after submission
   if (submitted) {
@@ -116,16 +179,28 @@ const ClientIntakeForm = () => {
   }
   
   return (
-    <div className="law-app-bg min-h-screen flex flex-col">
-      <div className="p-6">
-        <Logo linkTo="/" />
-      </div>
+    <div className="bg-[#050d1f] min-h-screen flex flex-col">
+      <header className="bg-[#0a1426] border-b border-gray-800">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center">
+            <div className="bg-blue-500 text-white rounded h-8 w-8 flex items-center justify-center mr-2">LS</div>
+            <span className="text-white text-xl font-semibold">LawScheduling</span>
+          </div>
+          <div className="space-x-6">
+            <a href={`/${slug}/intake`} className="text-blue-400 hover:text-blue-300">Client Intake</a>
+            <a href="/dashboard" className="text-gray-400 hover:text-gray-300">Dashboard</a>
+          </div>
+        </div>
+      </header>
       
       <div className="flex-1 flex items-center justify-center p-6">
-        <div className="auth-card w-full max-w-md">
+        <div className="bg-[#0a1426] border border-gray-800 rounded-lg shadow-xl w-full max-w-md p-8">
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-white">{slug === 'demo' ? 'Demo Law Firm' : 'Test Firm'} Intake Form</h1>
-            <p className="text-gray-400 mt-2">Please fill out this form to get in touch with our team</p>
+            <div className="text-blue-500 mb-2">Consultation Request</div>
+            <h1 className="text-2xl font-bold text-white">Request a consultation with our firm</h1>
+            <p className="text-gray-400 mt-2">
+              Please fill out the form below and our team will contact you shortly to schedule your consultation.
+            </p>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -139,7 +214,7 @@ const ClientIntakeForm = () => {
                 type="text"
                 value={formData.fullName}
                 onChange={handleChange}
-                className="law-input"
+                className="bg-[#0c1a2e] border border-gray-700 text-white rounded-md w-full p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter your full name"
               />
               {errors.fullName && <p className="mt-1 text-sm text-red-500">{errors.fullName}</p>}
@@ -155,7 +230,7 @@ const ClientIntakeForm = () => {
                 type="email"
                 value={formData.email}
                 onChange={handleChange}
-                className="law-input"
+                className="bg-[#0c1a2e] border border-gray-700 text-white rounded-md w-full p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter your email"
               />
               {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
@@ -171,7 +246,7 @@ const ClientIntakeForm = () => {
                 type="tel"
                 value={formData.phone}
                 onChange={handleChange}
-                className="law-input"
+                className="bg-[#0c1a2e] border border-gray-700 text-white rounded-md w-full p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter your phone number"
               />
               {errors.phone && <p className="mt-1 text-sm text-red-500">{errors.phone}</p>}
@@ -179,7 +254,7 @@ const ClientIntakeForm = () => {
             
             <button
               type="submit"
-              className="law-btn-primary"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md w-full py-3 transition duration-200"
               disabled={loading}
             >
               {loading ? (
@@ -190,7 +265,7 @@ const ClientIntakeForm = () => {
                   </svg>
                   Submitting...
                 </span>
-              ) : 'Submit'}
+              ) : 'Submit Information'}
             </button>
             
             <p className="text-xs text-gray-400 text-center mt-4">
