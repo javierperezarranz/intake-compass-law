@@ -2,11 +2,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { Session, User } from '@supabase/supabase-js';
 
-// Types
-export type UserRole = 'admin' | 'law-firm';
+// Types for our auth context
+export type UserRole = 'admin' | 'lawyer';
 
-export interface User {
+export interface UserDetails {
   id: string;
   email: string;
   role: UserRole;
@@ -15,94 +17,130 @@ export interface User {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: UserDetails | null;
+  session: Session | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, firmName: string, firmSlug: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAdmin: () => boolean;
 }
-
-// Mock data for demo purposes (would connect to a backend in production)
-const ADMIN_EMAIL = 'perezarranzjavier@gmail.com';
-const ADMIN_PASSWORD = 'perezarranzjavier';
-
-const mockUsers: User[] = [
-  {
-    id: '1',
-    email: ADMIN_EMAIL,
-    role: 'admin',
-  },
-  {
-    id: '2',
-    email: 'demo@lawfirm.com',
-    role: 'law-firm',
-    firmName: 'Demo Law Firm',
-    firmSlug: 'demo',
-  }
-];
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserDetails | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Check for saved user on load
   useEffect(() => {
-    const savedUser = localStorage.getItem('lawUser');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error('Failed to parse saved user:', error);
-        localStorage.removeItem('lawUser');
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          await refreshUserDetails(currentSession.user);
+        } else {
+          setUser(null);
+        }
       }
-    }
-    setLoading(false);
+    );
+
+    // Check for existing session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          await refreshUserDetails(currentSession.user);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Save user to localStorage when it changes
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('lawUser', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('lawUser');
+  // Fetch user details from the database
+  const refreshUserDetails = async (authUser: User) => {
+    try {
+      const { data: lawyerData, error: lawyerError } = await supabase
+        .from('lawyers')
+        .select(`
+          lawyer_id,
+          role,
+          firms:firm_id (
+            name,
+            slug
+          )
+        `)
+        .eq('lawyer_id', authUser.id)
+        .single();
+      
+      if (lawyerError) throw lawyerError;
+      
+      if (lawyerData) {
+        setUser({
+          id: authUser.id,
+          email: authUser.email || '',
+          role: lawyerData.role,
+          firmName: lawyerData.firms?.name,
+          firmSlug: lawyerData.firms?.slug,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      setUser(null);
     }
-  }, [user]);
+  };
 
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-      // Admin login
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        const adminUser = mockUsers.find(u => u.email === ADMIN_EMAIL);
-        if (adminUser) {
-          setUser(adminUser);
+      if (error) {
+        throw error;
+      }
+
+      if (data.user) {
+        // User data is fetched in the auth state change listener
+        toast.success('Logged in successfully');
+        if (email === 'perezarranzjavier@gmail.com') {
           navigate('/manage');
-          toast.success('Welcome, Admin!');
-          return;
+        } else if (data.user) {
+          // Get the user's firm slug
+          const { data: lawyerData } = await supabase
+            .from('lawyers')
+            .select(`
+              firms:firm_id (
+                slug
+              )
+            `)
+            .eq('lawyer_id', data.user.id)
+            .single();
+            
+          if (lawyerData?.firms?.slug) {
+            navigate(`/${lawyerData.firms.slug}/back/leads`);
+          }
         }
       }
-
-      // Regular user login
-      const foundUser = mockUsers.find(u => u.email === email);
-      if (foundUser) {
-        setUser(foundUser);
-        if (foundUser.firmSlug) {
-          navigate(`/${foundUser.firmSlug}/back/leads`);
-        }
-        toast.success(`Welcome back, ${foundUser.firmName || 'User'}!`);
-      } else {
-        toast.error('Invalid email or password');
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      toast.error('An error occurred during login');
+      toast.error(error.message || 'An error occurred during login');
     } finally {
       setLoading(false);
     }
@@ -111,49 +149,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, firmName: string, firmSlug: string) => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Check if email already exists
-      if (mockUsers.some(u => u.email === email)) {
-        toast.error('Email already in use');
-        setLoading(false);
-        return;
-      }
-
-      // Check if slug already exists
-      if (mockUsers.some(u => u.firmSlug === firmSlug)) {
-        toast.error('Firm URL already in use');
-        setLoading(false);
-        return;
-      }
-
-      // Create new user
-      const newUser: User = {
-        id: (mockUsers.length + 1).toString(),
+      const { data, error } = await supabase.auth.signUp({
         email,
-        role: 'law-firm',
-        firmName,
-        firmSlug,
-      };
+        password,
+        options: {
+          data: {
+            firm_name: firmName,
+            firm_slug: firmSlug
+          }
+        }
+      });
 
-      // In a real app, this would be an API call to register the user
-      mockUsers.push(newUser);
-      setUser(newUser);
-      navigate(`/${firmSlug}/back/leads`);
-      toast.success('Account created successfully!');
-    } catch (error) {
+      if (error) {
+        throw error;
+      }
+
+      if (data.user) {
+        toast.success('Account created successfully!');
+        navigate(`/${firmSlug}/back/leads`);
+      }
+    } catch (error: any) {
       console.error('Signup error:', error);
-      toast.error('An error occurred during signup');
+      toast.error(error.message || 'An error occurred during signup');
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    navigate('/');
-    toast.success('Logged out successfully');
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/');
+      toast.success('Logged out successfully');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('An error occurred during logout');
+    }
   };
 
   const isAdmin = () => {
@@ -161,7 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signUp, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, session, loading, login, signUp, logout, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

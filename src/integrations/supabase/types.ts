@@ -9,16 +9,155 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      firms: {
+        Row: {
+          created_at: string
+          email: string
+          firm_id: string
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          firm_id?: string
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          firm_id?: string
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lawyers: {
+        Row: {
+          created_at: string
+          firm_id: string
+          lawyer_id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          firm_id: string
+          lawyer_id: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          firm_id?: string
+          lawyer_id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lawyers_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "admin_firm_stats"
+            referencedColumns: ["firm_id"]
+          },
+          {
+            foreignKeyName: "lawyers_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["firm_id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          created_at: string
+          email: string
+          firm_id: string
+          full_name: string
+          lead_id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          firm_id: string
+          full_name: string
+          lead_id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          firm_id?: string
+          full_name?: string
+          lead_id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "admin_firm_stats"
+            referencedColumns: ["firm_id"]
+          },
+          {
+            foreignKeyName: "leads_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["firm_id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      admin_firm_stats: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          firm_id: string | null
+          lead_count: number | null
+          name: string | null
+          slug: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          firm_id?: string | null
+          lead_count?: never
+          name?: string | null
+          slug?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          firm_id?: string | null
+          lead_count?: never
+          name?: string | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      get_firm_id_by_slug: {
+        Args: { in_slug: string }
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      user_role: "admin" | "lawyer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -133,6 +272,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      user_role: ["admin", "lawyer"],
+    },
   },
 } as const

@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading } = useAuth();
   const params = useParams<{ slug?: string }>();
   
   // Show loading state
@@ -29,12 +29,12 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
   }
 
   // For admin routes
-  if (requireAdmin && !isAdmin()) {
+  if (requireAdmin && user.role !== 'admin') {
     return <Navigate to="/" replace />;
   }
 
   // For law firm routes, check if the slug matches the user's firm
-  if (params.slug && user.role === 'law-firm' && user.firmSlug !== params.slug) {
+  if (params.slug && user.role === 'lawyer' && user.firmSlug !== params.slug) {
     return <Navigate to={`/${user.firmSlug}/back/leads`} replace />;
   }
 
