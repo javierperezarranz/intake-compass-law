@@ -23,16 +23,18 @@ const ClientIntakeForm = () => {
     email?: string;
     phone?: string;
   }>({});
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [isValidFirm, setIsValidFirm] = useState<boolean | null>(null);
   const [firmName, setFirmName] = useState<string>('');
+  const [checkingFirm, setCheckingFirm] = useState(true);
   
   // Check if the firm exists
   useEffect(() => {
     const checkFirmExists = async () => {
       if (!slug) {
         setIsValidFirm(false);
+        setCheckingFirm(false);
         return;
       }
 
@@ -46,14 +48,17 @@ const ClientIntakeForm = () => {
         if (error || !data) {
           console.error('Error checking firm:', error);
           setIsValidFirm(false);
+          setCheckingFirm(false);
           return;
         }
         
         setFirmName(data.name);
         setIsValidFirm(true);
+        setCheckingFirm(false);
       } catch (err) {
         console.error('Error checking firm:', err);
         setIsValidFirm(false);
+        setCheckingFirm(false);
       }
     };
     
@@ -61,7 +66,7 @@ const ClientIntakeForm = () => {
   }, [slug]);
 
   // Return not found if the firm doesn't exist or we're still loading
-  if (isValidFirm === false) {
+  if (isValidFirm === false && !checkingFirm) {
     return <Navigate to="/not-found" />;
   }
 
@@ -99,7 +104,7 @@ const ClientIntakeForm = () => {
     e.preventDefault();
     if (!validate()) return;
     
-    setLoading(true);
+    setIsSubmitting(true);
     
     try {
       // Get firm_id from the slug
@@ -133,12 +138,12 @@ const ClientIntakeForm = () => {
       console.error('Submission error:', error);
       toast.error('An error occurred. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   // Show loading state while checking if firm exists
-  if (isValidFirm === null) {
+  if (checkingFirm) {
     return (
       <div className="law-app-bg min-h-screen flex flex-col items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
@@ -255,9 +260,9 @@ const ClientIntakeForm = () => {
             <button
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md w-full py-3 transition duration-200"
-              disabled={loading}
+              disabled={isSubmitting}
             >
-              {loading ? (
+              {isSubmitting ? (
                 <span className="flex items-center justify-center">
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

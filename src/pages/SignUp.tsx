@@ -10,6 +10,7 @@ const SignUp = () => {
   const [password, setPassword] = useState('');
   const [firmName, setFirmName] = useState('');
   const [firmSlug, setFirmSlug] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
@@ -59,10 +60,13 @@ const SignUp = () => {
     e.preventDefault();
     if (!validate()) return;
     
+    setIsSubmitting(true);
     try {
       await signUp(email, password, firmName, firmSlug);
     } catch (error) {
       console.error('Signup error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -157,9 +161,9 @@ const SignUp = () => {
             <button
               type="submit"
               className="law-btn-primary"
-              disabled={loading}
+              disabled={isSubmitting}
             >
-              {loading ? (
+              {isSubmitting ? (
                 <span className="flex items-center justify-center">
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
