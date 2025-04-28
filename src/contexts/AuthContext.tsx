@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -33,29 +34,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Helper function to fetch firm details
-  const fetchFirmDetails = async (email: string, maxRetries = 3): Promise<string | null> => {
-    for (let i = 0; i < maxRetries; i++) {
+  // Helper function to fetch firm details with retries
+  const fetchFirmDetails = async (email: string, maxRetries = 5): Promise<{ slug: string; name: string } | null> => {
+    let retryCount = 0;
+    let delay = 500; // Start with 500ms delay
+    
+    while (retryCount < maxRetries) {
       try {
+        console.log(`Attempt ${retryCount + 1} to fetch firm details for ${email}`);
         const { data, error } = await supabase
           .from('firms')
-          .select('slug')
+          .select('slug, name')
           .eq('email', email)
           .single();
 
-        if (error) throw error;
-        if (data?.slug) return data.slug;
-        
-        // If no data found and retries left, wait before next attempt
-        if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        if (error) {
+          console.warn(`Attempt ${retryCount + 1} failed:`, error);
+          if (retryCount === maxRetries - 1) throw error;
+        } else if (data) {
+          console.log('Firm details fetched successfully:', data);
+          return data;
+        } else {
+          console.warn(`No firm found for ${email} on attempt ${retryCount + 1}`);
         }
       } catch (error) {
-        console.error(`Attempt ${i + 1} failed:`, error);
-        if (i === maxRetries - 1) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.error(`Error in attempt ${retryCount + 1}:`, error);
+        if (retryCount === maxRetries - 1) throw error;
       }
+
+      // Exponential backoff with jitter
+      const jitter = Math.random() * 300;
+      const waitTime = delay + jitter;
+      console.log(`Waiting ${Math.round(waitTime)}ms before retry ${retryCount + 1}...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      delay *= 1.5; // Increase delay for next attempt
+      retryCount++;
     }
+    
     return null;
   };
 
@@ -75,6 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } else {
           setUser(null);
+          setLoading(false);
         }
       }
     );
@@ -87,10 +103,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (currentSession?.user) {
           await refreshUserDetails(currentSession.user);
+        } else {
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-      } finally {
         setLoading(false);
       }
     };
@@ -105,6 +122,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch user details from the database
   const refreshUserDetails = async (authUser: User) => {
     try {
+      console.log('Refreshing user details for:', authUser.id);
+      
       const { data: lawyerData, error: lawyerError } = await supabase
         .from('lawyers')
         .select(`
@@ -118,41 +137,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('lawyer_id', authUser.id)
         .single();
       
-      if (lawyerError) throw lawyerError;
+      if (lawyerError) {
+        console.error('Error fetching lawyer data:', lawyerError);
+        throw lawyerError;
+      }
       
       if (lawyerData) {
-        setUser({
+        const userDetails: UserDetails = {
           id: authUser.id,
           email: authUser.email || '',
-          role: lawyerData.role,
+          role: lawyerData.role as UserRole,
           firmName: lawyerData.firms?.name,
           firmSlug: lawyerData.firms?.slug,
-        });
+        };
+        
+        console.log('User details updated:', userDetails);
+        setUser(userDetails);
+      } else {
+        console.warn('No lawyer data found for user:', authUser.id);
+        setUser(null);
       }
     } catch (error) {
-      console.error('Error fetching user details:', error);
+      console.error('Error in refreshUserDetails:', error);
       setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
+      console.log('Attempting login for:', email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
       if (error) {
+        console.error('Login error from Supabase:', error);
         throw error;
       }
 
       if (data.user) {
-        // User data is fetched in the auth state change listener
         toast.success('Logged in successfully');
+        
         if (email === 'perezarranzjavier@gmail.com') {
           navigate('/manage');
-        } else if (data.user) {
+        } else {
           // Get the user's firm slug
           const { data: lawyerData } = await supabase
             .from('lawyers')
@@ -165,14 +197,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .single();
             
           if (lawyerData?.firms?.slug) {
+            console.log('Navigating to firm dashboard:', lawyerData.firms.slug);
             navigate(`/${lawyerData.firms.slug}/back/leads`);
+          } else {
+            console.warn('No firm slug found for user, redirecting to home');
+            navigate('/');
           }
         }
       }
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('Login process error:', error);
       toast.error(error.message || 'An error occurred during login');
-      throw error; // Re-throw to handle in the component
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -181,7 +217,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, firmName: string, firmSlug: string) => {
     setLoading(true);
     try {
-      console.log('Starting signup process for:', email);
+      console.log('Starting signup process for:', email, 'with firm slug:', firmSlug);
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -206,16 +243,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success('Account created successfully!');
       
       try {
-        // Try to get the firm slug with retries
-        const confirmedSlug = await fetchFirmDetails(email);
+        console.log('Waiting for firm data to be created...');
         
-        // Navigate to the dashboard using either the confirmed slug or the provided one
-        const targetSlug = confirmedSlug || firmSlug;
-        console.log('Navigating to dashboard with slug:', targetSlug);
-        navigate(`/${targetSlug}/back/leads`);
+        // Fetch firm details with retries
+        const firmDetails = await fetchFirmDetails(email);
+        
+        if (firmDetails) {
+          console.log('Firm created successfully, navigating to dashboard:', firmDetails.slug);
+          navigate(`/${firmDetails.slug}/back/leads`);
+        } else {
+          console.warn('Unable to fetch firm details after signup, using provided slug');
+          navigate(`/${firmSlug}/back/leads`);
+        }
       } catch (error) {
-        console.error('Error in post-signup process:', error);
-        // Fall back to the provided slug if there's an error
+        console.error('Error fetching firm details after signup:', error);
+        // Fall back to the provided slug
+        console.warn('Falling back to provided slug for navigation');
         navigate(`/${firmSlug}/back/leads`);
       }
     } catch (error: any) {
@@ -235,7 +278,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Logout error:', error);
       toast.error(error.message || 'An error occurred during logout');
-      throw error; // Re-throw to handle in the component
+      throw error;
     }
   };
 

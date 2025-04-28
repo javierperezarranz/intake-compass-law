@@ -1,6 +1,7 @@
 
 import { Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -16,8 +17,8 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
     return (
       <div className="law-app-bg flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lawfirm-primary mx-auto"></div>
-          <p className="mt-4 text-lawfirm-foreground">Loading...</p>
+          <Loader2 className="h-12 w-12 animate-spin text-lawfirm-primary mx-auto" />
+          <p className="mt-4 text-lawfirm-foreground">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -35,6 +36,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
 
   // For law firm routes, check if the slug matches the user's firm
   if (params.slug && user.role === 'lawyer' && user.firmSlug !== params.slug) {
+    console.log(`Slug mismatch: URL has ${params.slug}, user belongs to ${user.firmSlug}`);
     return <Navigate to={`/${user.firmSlug}/back/leads`} replace />;
   }
 
