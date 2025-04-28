@@ -38,13 +38,15 @@ const App = () => (
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<SignUp />} />
+            
+            {/* Law Firm Public Routes */}
             <Route path="/:slug" element={<LawFirmPage />} />
             <Route path="/:slug/intake" element={<ClientIntakeForm />} />
             
-            {/* Protected Routes */}
-            <Route path="/manage" element={
-              <ProtectedRoute requireAdmin>
-                <AdminDashboard />
+            {/* Law Firm Protected Routes */}
+            <Route path="/:slug/back" element={
+              <ProtectedRoute>
+                <LeadsDashboard />
               </ProtectedRoute>
             } />
             <Route path="/:slug/back/leads" element={
@@ -55,6 +57,13 @@ const App = () => (
             <Route path="/:slug/back/account" element={
               <ProtectedRoute>
                 <AccountSettings />
+              </ProtectedRoute>
+            } />
+            
+            {/* Admin Routes */}
+            <Route path="/manage" element={
+              <ProtectedRoute requireAdmin>
+                <AdminDashboard />
               </ProtectedRoute>
             } />
             

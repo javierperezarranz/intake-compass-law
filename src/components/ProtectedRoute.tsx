@@ -37,7 +37,14 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
   // For law firm routes, check if the slug matches the user's firm
   if (params.slug && user.role === 'lawyer' && user.firmSlug !== params.slug) {
     console.log(`Slug mismatch: URL has ${params.slug}, user belongs to ${user.firmSlug}`);
-    return <Navigate to={`/${user.firmSlug}/back/leads`} replace />;
+    
+    // If user has a firm slug, redirect them to their proper dashboard
+    if (user.firmSlug) {
+      return <Navigate to={`/${user.firmSlug}/back/leads`} replace />;
+    }
+    
+    // If user doesn't have a firm slug, redirect to home
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
