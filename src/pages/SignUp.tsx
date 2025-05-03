@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,11 +60,13 @@ const SignUp = () => {
     e.preventDefault();
     if (!validate()) return;
     
+    console.log('Starting signup with:', { email, firmName, firmSlug });
     setIsSubmitting(true);
     try {
       await signUp(email, password, firmName, firmSlug);
+      console.log('Signup completed successfully');
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('Signup error in component:', error);
       toast.error(error?.message || 'An error occurred during signup');
     } finally {
       setIsSubmitting(false);

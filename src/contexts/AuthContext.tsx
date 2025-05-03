@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -180,29 +179,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        toast.success('Logged in successfully');
-        
+        // Admin shortcut for specific email
         if (email === 'perezarranzjavier@gmail.com') {
+          toast.success('Logged in as administrator');
           navigate('/manage');
+          return;
+        }
+        
+        // Get the user's firm details
+        const { data: lawyerData, error: lawyerError } = await supabase
+          .from('lawyers')
+          .select(`
+            role,
+            firms:firm_id (
+              slug,
+              name
+            )
+          `)
+          .eq('lawyer_id', data.user.id)
+          .single();
+          
+        if (lawyerError) {
+          console.error('Error fetching lawyer data:', lawyerError);
+          toast.error('Could not retrieve your account information');
+          throw lawyerError;
+        }
+          
+        if (lawyerData?.firms?.slug) {
+          console.log('Navigating to firm dashboard:', lawyerData.firms.slug);
+          toast.success(`Logged in to ${lawyerData.firms.name}`);
+          navigate(`/${lawyerData.firms.slug}/back/leads`);
         } else {
-          // Get the user's firm slug
-          const { data: lawyerData } = await supabase
-            .from('lawyers')
-            .select(`
-              firms:firm_id (
-                slug
-              )
-            `)
-            .eq('lawyer_id', data.user.id)
-            .single();
-            
-          if (lawyerData?.firms?.slug) {
-            console.log('Navigating to firm dashboard:', lawyerData.firms.slug);
-            navigate(`/${lawyerData.firms.slug}/back/leads`);
-          } else {
-            console.warn('No firm slug found for user, redirecting to home');
-            navigate('/');
-          }
+          console.warn('No firm slug found for user, redirecting to home');
+          toast.error('Your account is not properly linked to a law firm');
+          navigate('/');
         }
       }
     } catch (error: any) {
@@ -219,6 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Starting signup process for:', email, 'with firm slug:', firmSlug);
       
+      // 1. Create the auth user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -239,28 +250,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('No user data returned from signup');
       }
 
+      // 2. Create firm record
+      const { data: firmData, error: firmError } = await supabase
+        .from('firms')
+        .insert([
+          { 
+            name: firmName, 
+            slug: firmSlug,
+            email: email 
+          }
+        ])
+        .select('firm_id')
+        .single();
+
+      if (firmError) {
+        console.error('Error creating firm:', firmError);
+        throw firmError;
+      }
+
+      if (!firmData) {
+        throw new Error('No firm data returned after creation');
+      }
+
+      // 3. Create lawyer record linked to firm
+      const { error: lawyerError } = await supabase
+        .from('lawyers')
+        .insert([
+          { 
+            lawyer_id: data.user.id,
+            firm_id: firmData.firm_id,
+            role: 'lawyer'
+          }
+        ]);
+
+      if (lawyerError) {
+        console.error('Error creating lawyer record:', lawyerError);
+        throw lawyerError;
+      }
+
       // Show success message
       toast.success('Account created successfully!');
       
-      try {
-        console.log('Waiting for firm data to be created...');
-        
-        // Fetch firm details with retries
-        const firmDetails = await fetchFirmDetails(email);
-        
-        if (firmDetails) {
-          console.log('Firm created successfully, navigating to dashboard:', firmDetails.slug);
-          navigate(`/${firmDetails.slug}/back/leads`);
-        } else {
-          console.warn('Unable to fetch firm details after signup, using provided slug');
-          navigate(`/${firmSlug}/back/leads`);
-        }
-      } catch (error) {
-        console.error('Error fetching firm details after signup:', error);
-        // Fall back to the provided slug
-        console.warn('Falling back to provided slug for navigation');
-        navigate(`/${firmSlug}/back/leads`);
-      }
+      // Navigate to the firm dashboard
+      console.log('Firm created successfully, navigating to dashboard:', firmSlug);
+      navigate(`/${firmSlug}/back/leads`);
+      
     } catch (error: any) {
       console.error('Signup process error:', error);
       toast.error(error.message || 'An error occurred during signup');
