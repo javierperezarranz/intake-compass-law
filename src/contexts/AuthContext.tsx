@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -73,51 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   };
 
-  useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        console.log('Auth state change:', event, currentSession?.user?.id);
-        setSession(currentSession);
-        
-        if (currentSession?.user) {
-          try {
-            await refreshUserDetails(currentSession.user);
-          } catch (error) {
-            console.error('Error refreshing user details:', error);
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-          setLoading(false);
-        }
-      }
-    );
-
-    // Check for existing session
-    const initializeAuth = async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        setSession(currentSession);
-        
-        if (currentSession?.user) {
-          await refreshUserDetails(currentSession.user);
-        } else {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
-    
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
   // Fetch user details from the database
   const refreshUserDetails = async (authUser: User) => {
     try {
@@ -163,6 +119,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    console.log('AuthProvider initialized');
+    
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        console.log('Auth state change:', event, currentSession?.user?.id);
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          try {
+            await refreshUserDetails(currentSession.user);
+          } catch (error) {
+            console.error('Error refreshing user details:', error);
+            setUser(null);
+            setLoading(false);
+          }
+        } else {
+          setUser(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    // Check for existing session
+    const initializeAuth = async () => {
+      try {
+        console.log('Getting initial session');
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log('Initial session:', currentSession ? 'exists' : 'none');
+        
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          await refreshUserDetails(currentSession.user);
+        } else {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+    
+    return () => {
+      console.log('AuthProvider cleanup: unsubscribing');
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -291,6 +299,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Show success message
       toast.success('Account created successfully!');
       
+      // Set user details manually since auth state change might not catch it immediately
+      setUser({
+        id: data.user.id,
+        email: data.user.email || '',
+        role: 'lawyer',
+        firmName: firmName,
+        firmSlug: firmSlug
+      });
+
       // Navigate to the firm dashboard
       console.log('Firm created successfully, navigating to dashboard:', firmSlug);
       navigate(`/${firmSlug}/back/leads`);

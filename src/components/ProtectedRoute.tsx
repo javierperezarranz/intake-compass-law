@@ -1,7 +1,9 @@
+
 import { Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useEffect } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -9,9 +11,19 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+  const { user, loading, session } = useAuth();
   const params = useParams<{ slug?: string }>();
   
+  useEffect(() => {
+    console.log("ProtectedRoute mount state:", { 
+      user: user ? `${user.email} (${user.role})` : 'not logged in', 
+      loading, 
+      firmSlug: user?.firmSlug,
+      routeSlug: params.slug,
+      sessionExists: !!session
+    });
+  }, [user, loading, session, params.slug]);
+
   // Show loading state
   if (loading) {
     return (
@@ -25,7 +37,8 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
   }
 
   // Check if user is authenticated
-  if (!user) {
+  if (!user || !session) {
+    console.log("User not authenticated, redirecting to login");
     return <Navigate to="/login" replace />;
   }
 

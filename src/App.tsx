@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -43,17 +43,19 @@ const App = () => (
             <Route path="/:slug" element={<LawFirmPage />} />
             <Route path="/:slug/intake" element={<ClientIntakeForm />} />
             
-            {/* Law Firm Protected Routes */}
+            {/* Law Firm Protected Routes - Root redirects to leads */}
             <Route path="/:slug/back" element={
               <ProtectedRoute>
-                <LeadsDashboard />
+                <Navigate to="../back/leads" replace />
               </ProtectedRoute>
             } />
+            
             <Route path="/:slug/back/leads" element={
               <ProtectedRoute>
                 <LeadsDashboard />
               </ProtectedRoute>
             } />
+            
             <Route path="/:slug/back/account" element={
               <ProtectedRoute>
                 <AccountSettings />
@@ -66,6 +68,7 @@ const App = () => (
                 <AdminDashboard />
               </ProtectedRoute>
             } />
+            <Route path="/admin" element={<Navigate to="/manage" replace />} />
             
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />
